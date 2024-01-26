@@ -1,0 +1,41 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: skeletonize 
+spec:
+  replicas: 4
+  template:
+    metadata:
+      labels:
+        app: realneuralnetworks
+    spec:
+      containers:
+        - name: realneuralnetworks
+          image: gcr.io/neuromancer-seung-import/realneuralnetworks:latest
+          #image: jingpengw/realneuralnetworks:latest
+          imagePullPolicy: Always
+          command: ["/bin/bash", "-c"]
+          args: ["julia skeletonize.jl -l gs://jwu-zfish/v1/20200406 -q skeleton -m 4 -e mesh_mip_3_err_40"]
+          env:
+          - name: PIPELINE_USER_QUEUE
+            value: skeleton
+          - name: QUEUE_TYPE
+            value: sqs
+          - name: SQS_URL
+            value: https://sqs.us-east-1.amazonaws.com/098703261575/skeleton
+          - name: TASK_LEASE_SECS
+            value: "3600"
+          - name: AWS_DEFAULT_REGION
+            value: us-east-1
+          volumeMounts:
+          - name: secrets
+            mountPath: "/root/.cloudvolume/secrets"
+            readOnly: true
+          resources:
+            requests:
+              memory: 50Gi
+      volumes:
+      - name: secrets
+        secret:
+          secretName: secrets
+      

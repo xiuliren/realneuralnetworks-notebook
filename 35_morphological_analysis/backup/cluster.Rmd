@@ -1,0 +1,113 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(h5)
+
+# DIR <- "~/workspace/zfish_analysis/01_data/20190415"
+DIR <- "~/seungmount/research/Jingpeng/14_zfish/01_data/20190415"
+
+f = h5file(file.path(DIR, "data.h5"))
+# f = h5file(file.path(DIR, "motor_neuron_data.h5"))
+neuronIdList = f["neuronIdList"][]
+similarityMatrix = f["nblast/all/flyTable/similarityMatrix"][]
+# similarityMatrix = f["nblast/all/zfishTable/similarityMatrix"][]
+# similarityMatrix = f["nblast/semantic/dendPositionOnly/similarityMatrix"][]
+# h5close(f)
+
+# library(mclust)
+# library(ggplot2)
+library("dendextend")
+
+distanceMatrix = -similarityMatrix
+dist = as.dist(distanceMatrix)
+neuronIdStringList = Map(toString, neuronIdList)
+hc = hclust(dist, method="ward.D")
+# dend <- hc %>% as.dendrogram # %>% set("labels", neuronIdList) # %>% set("branches_k_color", k=4)
+dend <- hc %>% as.dendrogram %>% set("labels", NULL) # %>% set("branches_k_color", k=4)
+dend %>% plot
+# abline(h = 1.5, lty=2)
+```
+```{r}
+library(dynamicTreeCut)
+original_clusters <- cutreeDynamic(hc, distM=distanceMatrix, method="tree")
+clusters <- original_clusters[order.dendrogram(dend)]
+
+# library(dendextendRcpp)
+library(colorspace)
+no0_unique <- function(x) {
+   u_x <- unique(x)   
+   u_x[u_x != 0]
+}
+
+clusters_numbers <- no0_unique(clusters)
+n_clusters <- length(clusters_numbers)
+cols <- rainbow_hcl(n_clusters)
+# dend2 <- branches_attr_by_clusters(dend, clusters, values = cols)
+dend2 <- branches_attr_by_lists(dend, clusters)
+# dend2 <- dend %>% branches_attr_by_clusters(clusters, values = cols)
+# dend2 <- dend 
+plot(dend2)
+
+# add colored bars based on some documentation
+# https://www.rdocumentation.org/packages/dendextend/versions/1.9.0/topics/branches_attr_by_clusters
+ord_cols <- rainbow_hcl(n_clusters)[order(clusters_numbers)]
+tmp_cols  <- rep(1, length(clusters))
+tmp_cols[clusters != 0] <- ord_cols[clusters != 0][clusters]
+colored_bars(tmp_cols, y_shift = -5, rowLabels = "")
+# all of the ordering is to handle the fact that the cluster numbers are not ascending...
+```
+
+
+```{r}
+library(gplots)
+memb <- cutree(hc, k = 25)
+# memb <- cutreeDynamic(hc, distM=distanceMatrix, method="tree")
+membhc = rainbow(length(unique(memb)), start = 0.1, end=0.9)
+membhc = membhc[as.vector(memb)]
+
+
+
+# heatmap.2(distanceMatrix, distfun=as.dist, hclustfun = function(x) hclust(x, method="ward.D"), Rowv=as.dendrogram(hc), Colv = as.dendrogram(hc), col = memb, row=memb, RowSideColors = membhc)
+library("RColorBrewer")
+heatmap.2(distanceMatrix, 
+          distfun=as.dist, 
+          hclustfun = function(x) hclust(x, method="ward.D"),
+          Rowv = dend, Colv = dend, 
+          col = brewer.pal(name="RdYlBu", 11), 
+          trace = "none",
+          xlab = NA,
+          ylab = NA)
+
+# d3heatmap can create interactive heatmap with better colormap and label. But it can only export rasterized images rather than svg files.
+# library(d3heatmap)
+# d3heatmap(distanceMatrix, Rowv = dend, Colv = dend)
+
+# tsne_out = Rtsne(distanceMatrix, is_distance = TRUE, num_threads=12)
+# plot(tsne_out)
+```
+
+# TSNE visualization of clustering
+```{r}
+# tsne_out = Rtsne(distanceMatrix, perplexity = 4, is_distance = TRUE)
+# plot(tsne_out$Y, col=memb, asp=1)
+```
+
+save the results
+```{r}
+# fly table
+# f["nblast/semantic/dendPositionOnly/dynamicCut/clusters"] = clusters
+# f["nblast/semantic/dendPositionOnly/dynamicCut/order"] = order.dendrogram(dend)
+# f["nblast/all/flyTable/cutTree/25/clusters"] = memb
+# f["nblast/all/flyTable/cutTree/25/order"] = order.hclust(hc)
+
+# zfish table
+# f["nblast/semantic/dendPositionOnly/dynamicCut/clusters"] = clusters
+# f["nblast/semantic/dendPositionOnly/dynamicCut/order"] = order.dendrogram(dend)
+# f["nblast/all/flyTable/cutTree/25/clusters"] = memb
+# f["nblast/all/flyTable/cutTree/25/order"] = order.hclust(hc)
+```
